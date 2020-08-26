@@ -31,13 +31,6 @@ def build_tunnel_password(secret, authenticator, psk):
 	data = b'\x00' + a + bytes(cc_all)
 	return data
 
-def start_radius(sql_server):
-	srv = FakeServer(dict=dictionary.Dictionary("dictionary"),  authport=1812)
-	srv.sql_conn =  psycopg2.connect(host=sql_server['address'],dbname=sql_server['dbname'], user=sql_server['user'], password=sql_server['password'])
-	srv.hosts["0.0.0.0"] = server.RemoteHost("0.0.0.0", b"secret", "ap10")
-	srv.BindToAddress("0.0.0.0")
-	srv.Run()
-
 def get_next_id(cur):
 	#find the next avaliable id number to use for the device
 	cur.execute("SELECT id FROM radcheck ORDER BY id")
@@ -49,7 +42,15 @@ def get_next_id(cur):
 	else:
 		return str(result[len(result)-1][0]+2)
 
-class FakeServer(server.Server):
+class RadiusServer(server.Server):
+
+	def __init__(self, sql_config, dict):
+		super().__init__(dict=dict)
+		self.sql_conn =  psycopg2.connect(host=sql_config['address'],dbname=sql_config['dbname'], user=sql_config['user'], password=sql_config['password'])
+		self.hosts["0.0.0.0"] = server.RemoteHost("0.0.0.0", b"secret", "ap10")
+		self.BindToAddress("0.0.0.0")
+		self.Run()
+
 
 	def HandleAuthPacket(self, pkt):
 		print("Received an authentication request")
@@ -114,11 +115,18 @@ class FakeServer(server.Server):
 def send_config(conn, command):
 		#print(command)
 		conn.send(json.dumps(command).encode('utf-8'))
-		return json.loads(conn.recv(2048).decode("utf-8"))
+		returned = conn.recv(2048).decode("utf-8")
+		print(returned)
+		return json.loads(returned)
 		
 def config_ap(config, conn, sql_conn):
 	for interface in config['interfaces']:
 		print(send_config(conn,{"method":"transact", "params":[ "Open_vSwitch", {"op": "insert","table": "Wifi_Inet_Config","row":interface}], "id": 0}))
+
+	if 'openflow-controller' in config:
+		print(send_config(conn,{"method":"transact", "params":[ "Open_vSwitch", {"op": "insert","table": "Wifi_Inet_Config", \
+			"row":{"if_name":"bridge", "if_type":"bridge","enabled":True, "network":True, \
+			"controller_address":config['openflow-controller']['address'], "datapath_id":config['openflow-controller']['datapath-id']}}], "id": 0}))
 
 	wlan_enabled = []
 	vif_configs = {}
@@ -203,8 +211,12 @@ with open(sys.argv[1], 'r') as stream:
 		print(exc)
 		exit(-1)
 
-radius_thread = threading.Thread(target=start_radius, args=(config['postgresql_db'],))
+#radius_thread = threading.Thread(target=start_radius, args=(config['postgresql_db'],))
+#radius_thread.start()
+
+radius_thread = threading.Thread(target=RadiusServer, args=(config['postgresql_db'],dictionary.Dictionary("dictionary"),))
 radius_thread.start()
+RadiusServer
 
 controller_threads = []
 
