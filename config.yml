@@ -1,67 +1,57 @@
-interfaces:
-  - if_name: "eth0.2"
-    if_type: eth
-    enabled: true
-    network: false
-    ip_assign_scheme: none
-    mtu: 1500
-  - if_name: "eth0.3"
-    if_type: eth
-    enabled: true
-    network: false
-    ip_assign_scheme: none
-    mtu: 1500
-  - if_name: "wlan0"
-    if_type: eth
-    enabled: true
-    network: false
-    ip_assign_scheme: none
-    mtu: 1500
-  - if_name: "wlan1"
-    if_type: eth
-    enabled: true
-    network: false
-    ip_assign_scheme: none
-    mtu: 1500
-wlan_interfaces:
-  - if_name: wlan0
-    enabled: true
-    freq_band: 5G
-    country: NZ
-    hw_mode: 11n
-  - if_name: wlan1
-    enabled: false
-    freq_band: 2.4G
-    country: NZ
-    hw_mode: 11n
-wifi_networks:
-  # - ssid: testSSID1
-  #   if_name: wlan0
-  #   enabled: true
-  #   mode: ap
-  #   ssid_broadcast: enabled
-  #   security: 
-  #     - encryption: OPEN
-  #   mac_list_type: none
-  #   uapsd_enable: false
-  # - ssid: testSSID2
-  #   if_name: wlan0
-  #   enabled: true
-  #   mode: ap
-  #   ssid_broadcast: enabled
-  #   security: 
-  #     - encryption: WPA-PSK
-  #     - passphrase: 123456789
-  #   mac_list_type: none
-  #   uapsd_enable: false
-  - ssid: testSSID3
-    if_name: wlan0
-    enabled: true
-    mode: ap
-    ssid_broadcast: enabled
-    security: 
-      - encryption: WPA-PSK-RADIUS
-      - auth_server: "163.7.137.63:1812"
-      - auth_server_shared_secret: secret
-    mac_list_type: none
-    uapsd_enable: false
+postgresql_db:
+  address: '163.7.137.203'
+  dbname: radius
+  user: radius
+  password: password
+access_points:  
+  default:
+    # openflow-controller:
+    #   address: "tcp:163.7.137.63:6653"
+    #   datapath-id: "0x01"
+    # openflow_rules:
+    #   - action: normal
+    #     priority: 1
+    #     rule: 
+    #     table: 0
+    #     token: rule
+    #   - action: normal
+    #     priority: 2
+    #     rule: in_port=any,eth_type=0x800
+    #     table: 0
+    #     token: rule
+    interfaces:
+      - if_name: "eth0.2"
+        if_type: eth
+        enabled: true
+        network: false
+        of_port: 1
+      - if_name: "eth0.3"
+        if_type: eth
+        enabled: true
+        network: false
+        of_port: 2
+      - if_name: "wlan0"
+        if_type: eth
+        enabled: true
+        network: false
+        of_port: 3
+      - if_name: "wlan1"
+        if_type: eth
+        enabled: true
+        network: false
+        of_port: 4
+    wlan_interfaces:
+      - if_name: wlan0
+        enabled: true
+        freq_band: 5G
+        country: NZ
+        hw_mode: 11n
+    wifi_networks:
+      - ssid: testSSID1
+        if_name: wlan0
+        enabled: true
+        security: 
+         - encryption: WPA-PSK-RADIUS
+         - auth_server: "163.7.137.63:1812"
+         - auth_server_shared_secret: secret
+         - default_password: somePassword
