@@ -15,12 +15,14 @@ class AP:
             password=config['postgresql_db']['password'])
         self.config = config
         self.ovsdb_conn = ovsdb_conn
+        #checks if AP is already configured
         awlan_node_column = self.ovsdb_select("AWLAN_Node", [['upgrade_status', '==', 0]])
         if awlan_node_column['result'][0]['rows'] != []:
             ap_hostname = awlan_node_column['result'][0]['rows'][0]['id']
-            print('Connection from ', ap_hostname, 'at ', addr)
+            print('Connection from', ap_hostname, 'at', addr)
+            #finds config to apply to AP
             if ap_hostname in config['access_points'].keys():
-                print('configuring ', ap_hostname, ' with custom config')
+                print('configuring', ap_hostname, 'with custom config')
                 self.config_ap(copy.deepcopy(config['access_points'][ap_hostname]))
             elif 'default' in  config['access_points'].keys():
                 print('configuring ', ap_hostname, ' with default config')
@@ -30,8 +32,8 @@ class AP:
         self.ovsdb_conn.close()
 
     def send_config(self, command):
-        '''performs a single OVSDB transaction'''
-        print("sending ", command)
+        '''performs a single operation on the OVSDB db'''
+        #print("sending ", command)
         self.ovsdb_conn.send(json.dumps(command).encode('utf-8'))
         returned = json.loads(self.ovsdb_conn.recv(2048).decode("utf-8"))
         if returned['error'] is not None:
@@ -82,9 +84,16 @@ class AP:
                 "controller_address":config['openflow-controller']['address'],
                 "datapath_id":config['openflow-controller']['datapath-id']})
 
-        print("configuring WLAN")
+        #send openflow rules to AP
+        if 'openflow_rules' in config:
+            print("configuring openflow rules")
+            for rule in config['openflow_rules']:
+                rule['bridge'] = 'bridge'
+                self.ovsdb_insert("Openflow_Config", rule)
+
+        print("configuring WLANs")
         wlan_enabled = []
-        vif_configs = {}
+        vif_config_uuids = {}
         default_password = ''
         for network in config['wifi_networks']:
             enabled = network['enabled']
@@ -100,13 +109,13 @@ class AP:
             self.ovsdb_insert("Wifi_VIF_State", network)
             if enabled:
                 wlan_enabled.append(data['result'][0]['uuid'][1])
-            vif_configs.setdefault(network['if_name'],["uuid"]).append(data['result'][0]['uuid'][1])
+            vif_config_uuids.setdefault(network['if_name'],["uuid"]).append(data['result'][0]['uuid'][1])
 
         print("configuring WLAN interfaces")
         for wlan_interface in config['wlan_interfaces']:
             self.ovsdb_insert("Wifi_Radio_State", wlan_interface)
-            if wlan_interface['if_name'] in vif_configs:
-                wlan_interface['vif_configs'] = vif_configs[wlan_interface['if_name']]
+            if wlan_interface['if_name'] in vif_config_uuids:
+                wlan_interface['vif_configs'] = vif_config_uuids[wlan_interface['if_name']]
             self.ovsdb_insert("Wifi_Radio_Config", wlan_interface)
 
         print("enabling WLANs")
@@ -115,14 +124,20 @@ class AP:
 
         self.ovsdb_update("AWLAN_Node", [["upgrade_status", "==", 0]], {"upgrade_status":1})
 
-        print("checking AP regestered in postgresql db")
+        
         for network in config['wifi_networks']:
-            result = self.ovsdb_select("Wifi_Inet_State",
-                [["if_name", "==", network["if_name"]]])['result'][0]['rows']
-            while result == []:
-                time.sleep(0.5)
+            #checks if wpa-psk-radius is enabled
+            wpa_psk_radius_enabled = False
+            for option in network['security'][1]:
+                if option[1] == 'WPA-PSK-RADIUS':
+                    wpa_psk_radius_enabled = True
+            if wpa_psk_radius_enabled:
+                print("checking AP regestered in postgresql db")
                 result = self.ovsdb_select("Wifi_Inet_State",
                     [["if_name", "==", network["if_name"]]])['result'][0]['rows']
-            print(result)
-            ap_user_name = result[0]['hwaddr'].upper().replace(':', '-') + ":" + network['ssid']
-            radius_server.add_login_db(ap_user_name, default_password, self.sql_conn)
+                while result == []:
+                    time.sleep(0.5)
+                    result = self.ovsdb_select("Wifi_Inet_State",
+                        [["if_name", "==", network["if_name"]]])['result'][0]['rows']
+                ap_user_name = result[0]['hwaddr'].upper().replace(':', '-') + ":" + network['ssid']
+                radius_server.add_login_db(ap_user_name, default_password, self.sql_conn)

@@ -12,17 +12,21 @@ def build_tunnel_password(secret, authenticator, password):
     salt = bytes([random.randint(128,255), random.randint(0,255)])
     if isinstance(password, six.text_type):
         password = password.encode('utf-8')
-
+    #appends password length to the start of the password
     buf = struct.pack('B', len(password)) + password
+    #pads out password length
     if len(buf) % 16 != 0:
         buf += six.b('\x00') * (16 - (len(buf) % 16))
     result = six.b('')
+    #adds together then md5 hashes the shared secret, the authenticator and the salt
     hashed = hashlib.md5(secret + authenticator + salt).digest()
     while buf:
+        #xors the password and hashed values
         for i in range(16):
             result += bytes((hashed[i] ^ buf[i],))
         last = result[-16:]
         buf = buf[16:]
+        #hashes last block of cyphertext with secret
         hashed = hashlib.md5(secret + last).digest()
 
     return b'\x00' + salt + result
@@ -46,6 +50,7 @@ def add_login_db(user_name, password, sql_conn):
     if result is None:
         #find the next avaliable id number to use for the device
         new_id = get_next_id(cur)
+        #adds the devices to the db
         cur.execute("INSERT INTO radcheck VALUES\
             (" + new_id + ", '" + user_name + "', 'Cleartext-Password', ':=', '" + user_name +"')")
         cur.execute("INSERT INTO radreply VALUES\
@@ -61,6 +66,7 @@ class RadiusServer(server.Server):
 
     def __init__(self, sql_config, radius_dict):
         super().__init__(dict=radius_dict)
+        #sets up connection to postresql db
         self.sql_conn =  psycopg2.connect(host=sql_config['address'],dbname=sql_config['dbname'],
             user=sql_config['user'], password=sql_config['password'])
         self.hosts["0.0.0.0"] = server.RemoteHost("0.0.0.0", b"secret", "APs")
@@ -93,8 +99,6 @@ class RadiusServer(server.Server):
         else:
             print("the device is unknown")
             #look up the AP the device connected to in the db
-            print("SELECT id, UserName, Attribute, Value, Op FROM radcheck\
-                WHERE Username = '" + pkt['Called-Station-Id'][0] + "' ORDER BY id")
             cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radcheck\
                 WHERE Username = '" + pkt['Called-Station-Id'][0] + "' ORDER BY id")
             result = cur.fetchone()
