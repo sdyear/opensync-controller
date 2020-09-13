@@ -37,7 +37,7 @@ radius_thread.start()
 # an AP object for each connection to configre each AP
 controller_threads = []
 socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-socket.bind(('',6640))
+socket.bind(('',port_num))
 socket.listen(0)
 while True:
     ovsdb_conn, addr = socket.accept()
