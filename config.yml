@@ -4,21 +4,24 @@ postgresql_db:
   dbname: radius
   user: radius
   password: password
-# a list of different configurations for APs, configs in the list can either be titled 'default' or 
-# the hostname of the specific AP that config is targeting. The controller checks the hostname
-# against the list of AP configs and if it matches it will apply that config to the AP otherwise it
-# will apply the config called default if that exists, otherwise it will apply no config.
+# a list of different configurations for APs, configs in the list can 
+# either be titled 'default' or the hostname of the specific AP that
+# config is targeting. The controller checks the hostname against the
+# list of AP configs and if it matches it will apply that config to 
+# the AP otherwise it will apply the config called default if that
+# exists, otherwise it will apply no config.
 access_points:
   default:
-    # OpenFlow rules on Open vSwitch running on the AP can either be configured through an OpenFlow controller
-    # or through specifying the individual rules as shown below. Only one of these options should be used
-    # at a time. If neither is specified Open vSwitch will forward the packets to NORMAL (the non-OpenFlow 
-    # pipeline).
+    # OpenFlow rules on Open vSwitch running on the AP can either be
+    # configured through an OpenFlow controller or through specifying
+    # the individual rules as shown below. Only one of these options
+    # should be used at a time. If neither is specified Open vSwitch
+    # will forward the packets to NORMAL (the non-OpenFlow pipeline).
     # openflow-controller:
     #   address: "tcp:163.7.137.63:6653"
     #   datapath-id: "0x01"
-    # The rule field can be left blank to create a rule with a rule which wildcards all match fields (e.g.
-    # for a table-miss rule).
+    # The rule field can be left blank to create a rule with a rule 
+    # which wildcards all match fields (e.g. for a table-miss rule).
     # openflow_rules:
     #   - action: normal
     #     priority: 1
@@ -30,7 +33,8 @@ access_points:
     #     rule: in_port=any,eth_type=0x800
     #     table: 0
     #     token: rule2
-    # This section specifies the interfaces to be added to the Open vSwtich bridge.
+    # This section specifies the interfaces to be added to the
+    # Open vSwtich bridge.
     interfaces:
       - if_name: "eth0.2"
         if_type: eth
@@ -52,28 +56,31 @@ access_points:
         enabled: true
         network: false
         of_port: 4
-    # this section is used to specify what interfaces are wireless interfaces and to configure what mode 
-    # they opperate in.
+    # this section is used to specify what interfaces are wireless
+    # interfaces and to configure what mode they opperate in.
     wlan_interfaces:
       - if_name: wlan0
         enabled: true
         freq_band: 5G
         country: NZ
         hw_mode: 11n
-    # this section defines the wireless networks which are broadcast by the AP. There are 3 different security
-    # options.
+    #  this section defines the wireless networks which are broadcast
+    #  by the AP. There are 3 different security options.
     # encryption: OPEN
-    #   this disables WPA and makes a completely open wifi network
+    #  this disables WPA and makes a completely open wifi network
     # encryption: WPA-PSK
     # passphrase: <passphrase
-    #   This configures standard wpa-psk with a single passphrase as specified
+    #  This configures standard wpa-psk with a single passphrase as
+    #  specified
     # encryption: WPA-PSK-RADIUS
     # auth_server: "163.7.137.63:1812"
     # auth_server_shared_secret: secret
     # default_password: somePassword
-    #   This configures Individual PSK based authentication, the details of a RADIUS server must be specified.
-    #   This RADIUS server is then queried every time a device connects. The default_password feild specifies 
-    #   the password a unknown device is expected to use for that AP.
+    #  This configures Individual PSK based authentication, the 
+    #  details of a RADIUS server must be specified. This RADIUS
+    #  server is then queried every time a device connects. The
+    #  default_password feild specifies the password a unknown
+    #  device is expected to use for that AP.
     wifi_networks:
       - ssid: testSSID1
         if_name: wlan0
