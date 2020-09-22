@@ -31,16 +31,6 @@ def build_tunnel_password(secret, authenticator, password):
 
     return b'\x00' + salt + result
 
-def get_next_id(cur):
-    ''' finds the next avaliable id number in the device db '''
-    cur.execute("SELECT id FROM radcheck ORDER BY id")
-    result = cur.fetchall()
-    if len(result) == 0:
-        return '0'
-    if len(result) == 1:
-        return str(result[0][0]+1)
-    return str(result[len(result)-1][0]+2)
-
 def add_login_db(user_name, password, sql_conn):
     """adds an APs username and password to the postgresql db"""
     cur = sql_conn.cursor()
@@ -48,13 +38,8 @@ def add_login_db(user_name, password, sql_conn):
     result = cur.fetchone()
     #if the ap is not in the db
     if result is None:
-        #find the next avaliable id number to use for the device
-        new_id = get_next_id(cur)
         #adds the devices to the db
-        cur.execute("INSERT INTO radcheck VALUES\
-            (" + new_id + ", '" + user_name + "', 'Cleartext-Password', ':=', '" + user_name +"')")
-        cur.execute("INSERT INTO radreply VALUES\
-            (" + new_id + ", '" + user_name + "', 'Tunnel-Password', ':=', '" + password +"')")
+        cur.execute("INSERT INTO radcheck VALUES ('" + user_name + "', '" + password +"')")
         print("device added to db with User-Name = ", user_name, " and password = ", password)
         sql_conn.commit()
     else:
@@ -77,17 +62,14 @@ class RadiusServer(server.Server):
         print("Received an authentication request from ", pkt['User-Name'])
         #checks if connecting device is in the db
         cur = self.sql_conn.cursor()
-        cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radcheck\
-            WHERE Username = '" + pkt['User-Name'][0] +  "' ORDER BY id")
+        cur.execute("SELECT * FROM radcheck\
+            WHERE Username = '" + pkt['User-Name'][0] +  "'")
         result = cur.fetchone()
-        #if it's in the db and the password is correct
-        if result is not None and result[3]==pkt.PwDecrypt(pkt['User-Password'][0]):
-            #get the tunnel-password for that device
-            cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radreply\
-                WHERE Username = '" + pkt['User-Name'][0] + "' ORDER BY id")
+        #if it's in the db
+        if result is not None:
             #reply with the tunnel password as an attribute
             reply = self.CreateReplyPacket(pkt)
-            cleartext_tunnel_password = cur.fetchone()[3]
+            cleartext_tunnel_password = result[1]
             data = build_tunnel_password(reply.secret, pkt.authenticator, cleartext_tunnel_password)
             reply.AddAttribute("Tunnel-Password", data)
             reply.code = packet.AccessAccept
@@ -99,35 +81,35 @@ class RadiusServer(server.Server):
         else:
             print("the device is unknown")
             #look up the AP the device connected to in the db
-            cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radcheck\
-                WHERE Username = '" + pkt['Called-Station-Id'][0] + "' ORDER BY id")
+            cur.execute("SELECT * FROM radcheck\
+                WHERE Username = '" + pkt['Called-Station-Id'][0] + "'")
             result = cur.fetchone()
             #if the ap is in the db
-            if result is not None and result[3]==pkt['Called-Station-Id'][0]:
+            if result is not None:
                 print("the AP is known")
                 #get the tunnel-password for that ap
-                cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radreply\
-                    WHERE Username = '" + pkt['Called-Station-Id'][0] + "' ORDER BY id")
+                cur.execute("SELECT * FROM radcheck\
+                    WHERE Username = '" + pkt['Called-Station-Id'][0] + "'")
                 #add the device to the db
-                add_login_db(str(pkt[1][0],'utf-8'), cur.fetchone()[3], self.sql_conn)
+                add_login_db(str(pkt[1][0],'utf-8'), cur.fetchone()[1], self.sql_conn)
                 #look for the device in the db again
-                cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radcheck\
-                    WHERE Username = '" + pkt['User-Name'][0] +  "' ORDER BY id")
+                cur.execute("SELECT * FROM radcheck\
+                    WHERE Username = '" + pkt['User-Name'][0] +  "'")
                 result = cur.fetchone()
                 #if the device is now in the db
-                if result is not None and result[3]==pkt.PwDecrypt(pkt['User-Password'][0]):
+                if result is not None:
                     print("the deive is now known")
                     #get the tunnel password for the device
-                    cur.execute("SELECT id, UserName, Attribute, Value, Op FROM radreply\
-                        WHERE Username = '" + pkt['User-Name'][0] + "' ORDER BY id")
+                    cur.execute("SELECT * FROM radcheck\
+                        WHERE Username = '" + pkt['User-Name'][0] + "'")
                     #send a radius reply with the tunnel password as an attribute
                     reply = self.CreateReplyPacket(pkt)
-                    data = build_tunnel_password(reply.secret, pkt.authenticator, cur.fetchone()[3])
+                    data = build_tunnel_password(reply.secret, pkt.authenticator, cur.fetchone()[1])
                     reply.AddAttribute("Tunnel-Password", data)
                     reply.code = packet.AccessAccept
                     reply.add_message_authenticator()
                     self.SendReplyPacket(pkt.fd, reply)
                 else:
-                    print("adding device ", pkt['User-Name'][0]," failed")
+                    print("adding device", pkt['User-Name'][0]," failed")
             else:
-                print('the AP ', pkt['Called-Station-Id'][0],'is unknown')
+                print('the AP', pkt['Called-Station-Id'][0],'is unknown')
